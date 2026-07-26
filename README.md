@@ -64,7 +64,24 @@ the RLS policies don't need to change.
 1. Create a project at supabase.com.
 2. In **Authentication → Providers**, enable **Anonymous Sign-Ins**.
 3. In the SQL editor, run `supabase/schema.sql`.
-4. Grab your Project URL and anon public key from **Settings → API**.
+
+If you're using the **Netlify Supabase extension** instead of setting
+variables by hand: it auto-creates environment variables for you, but
+**not** with the `VITE_` prefix Vite requires to expose them to browser
+code — commonly `SUPABASE_URL` / `SUPABASE_ANON_KEY`, sometimes
+`SUPABASE_DATABASE_URL` depending on version and which framework you
+selected during setup. `vite.config.js` already checks for all of those
+names and maps whichever one exists onto `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY` at build time, so nothing to rename in most cases.
+
+To confirm what the extension actually named things: Netlify dashboard →
+**Project configuration → Environment variables**. If the names there
+aren't in the fallback list in `vite.config.js`, add them (or just rename
+the Netlify variables to match `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY` directly — either works).
+
+If Supabase isn't configured correctly, the app now shows an on-page
+explanation instead of a blank page (see "Blank page" below).
 
 ### 2. Environment variables
 
@@ -120,3 +137,16 @@ functions at `netlify/functions/`.
   reliable fallback and is always available.
 - Web Speech API support varies (best in Chrome/Edge; Safari is partial,
   Firefox unsupported) — the mic button hides itself when unsupported.
+
+## Troubleshooting
+
+**Blank beige page, nothing renders.** This happens when
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` resolve to `undefined` —
+`createClient(undefined, undefined)` used to throw at module load, before
+React ever painted anything, so the only visible trace was an error in the
+browser console (Cmd/Ctrl+Shift+J or F12). This is now handled: a missing
+config shows an on-page explanation (`ConfigNotice`) instead, and a generic
+`ErrorBoundary` around the whole app means any *other* future crash also
+renders a visible message instead of a silent blank screen. If you still
+see a blank page, check the browser console — it now indicates a bug
+somewhere else, not a config problem.
