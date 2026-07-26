@@ -1,13 +1,23 @@
 import { useState } from "react";
 import { useGolf } from "./lib/useGolf.js";
+import { isSupabaseConfigured } from "./lib/supabase.js";
 import Header from "./components/Header.jsx";
 import InputDock from "./components/InputDock.jsx";
 import Leaderboard from "./components/Leaderboard.jsx";
 import ManualShotSheet from "./components/ManualShotSheet.jsx";
 import ManualSituationSheet from "./components/ManualSituationSheet.jsx";
 import SettingsSheet from "./components/SettingsSheet.jsx";
+import ConfigNotice from "./components/ConfigNotice.jsx";
 
 export default function App() {
+  if (!isSupabaseConfigured) {
+    return <ConfigNotice />;
+  }
+
+  return <GolfApp />;
+}
+
+function GolfApp() {
   const golf = useGolf();
   const [showBag, setShowBag] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
