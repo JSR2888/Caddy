@@ -6,8 +6,29 @@ export async function ensureSession() {
   if (session) return session;
 
   const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
+  if (error) {
+    throw new Error(
+      `Couldn't start an anonymous session (${error.message}). ` +
+      `Check that Authentication -> Providers -> Anonymous Sign-Ins is enabled on your Supabase project.`
+    );
+  }
   return data.session;
+}
+
+/** Every write path needs a user id. This re-establishes the session if it's missing
+ *  instead of assuming one already exists, and fails with a clear message instead of
+ *  a bare null-property crash if it can't. */
+async function requireUserId() {
+  const session = await ensureSession();
+  const userId = session?.user?.id;
+  if (!userId) {
+    throw new Error(
+      "No authenticated user. Check that Anonymous Sign-Ins are enabled in " +
+      "Supabase (Authentication -> Providers) and that VITE_SUPABASE_URL / " +
+      "VITE_SUPABASE_ANON_KEY point at the right project."
+    );
+  }
+  return userId;
 }
 
 export async function loadShots() {
@@ -20,11 +41,11 @@ export async function loadShots() {
 }
 
 export async function insertShot(shot) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const userId = await requireUserId();
   const { data, error } = await supabase
     .from("shots")
     .insert({
-      user_id: user.id,
+      user_id: userId,
       club: shot.club,
       swing_effort_percentage: shot.swingEffortPercentage ?? null,
       carry_distance_achieved: shot.carryDistanceAchieved ?? null,
@@ -44,20 +65,25 @@ export async function deleteShot(id) {
 }
 
 export async function resetAllShots() {
-  const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from("shots").delete().eq("user_id", user.id);
+  const userId = await requireUserId();
+  const { error } = await supabase.from("shots").delete().eq("user_id", userId);
   if (error) throw error;
 }
 
 export async function saveMetric({ model, requestType, latencyMs }) {
-  const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from("llm_metrics").insert({
-    user_id: user.id,
-    model,
-    request_type: requestType,
-    latency_ms: latencyMs
-  });
-  if (error) console.warn("Failed to save LLM metric:", error);
+  try {
+    const userId = await requireUserId();
+    const { error } = await supabase.from("llm_metrics").insert({
+      user_id: userId,
+      model,
+      request_type: requestType,
+      latency_ms: latencyMs
+    });
+    if (error) console.warn("Failed to save LLM metric:", error);
+  } catch (err) {
+    // Metrics are best-effort — never let a logging failure block the actual shot/advice flow.
+    console.warn("Failed to save LLM metric:", err.message);
+  }
 }
 
 export async function loadMetrics() {
